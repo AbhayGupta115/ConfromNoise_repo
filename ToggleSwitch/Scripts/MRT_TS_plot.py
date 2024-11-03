@@ -2,9 +2,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import re
 
-noises = [0.006]#np.arange(0.0, 0.011,0.002).round(4)
-dt2 = ['0.01','0.1', '1', '10', '100']
+noises = np.arange(0.0, 0.011,0.002).round(4)
+dt2 = ['0.01']
 states = {
+          '10' : [],
+          '01' : [],
+          '00' : [],
+          '11' : []
+            }
+stability = {
           '10' : [],
           '01' : [],
           '00' : [],
@@ -30,9 +36,9 @@ for row in f:
   if row[0] == '#SE:':
     switching_events[str(noise_lvl) + str(timestep)] = [row[1], row[2], row[3]]
 
-  if str(row[0]) in list(states.keys()):
-    
-    states[row[0]].append(round(float(row[-1]),2))
+  if str(row[0]) in list(states.keys()):    
+    stability[row[0]].append(round(float(row[-1]),2))
+    states[row[0]].append(round(float(row[2]),2))
 f.close()
 
 for i in range(len(dt2)):
@@ -67,4 +73,39 @@ for i in range(len(noises)):
   plt.legend(bbox_to_anchor=(1.15, 1), borderaxespad=0)
   #plt.show()
   plt.savefig('C:/project/Summer_2022_DrMKJolly/Link_Noise/individualSimuls/ToggleSwitch/test/param_no_' + str(param_no) + "/MRTs_TS_param_" + str(int(param)%3) + "_noise_"+ str(noises[i]) +'.png',bbox_inches="tight", dpi = 300)
+  plt.close()
+
+
+for i in range(len(dt2)):
+  f = plt.figure()
+  f.set_figwidth(7)
+  f.set_figheight(5)
+  for key in states.keys():
+      y = stability[key][i*len(noises):(i+1)*len(noises)]
+      x = noises
+      plt.plot(x,y, label = key, marker='o', alpha = 0.7)
+  plt.title('Stability mean for TS; Param: ' + str(param) + 'timestep:' + str(dt2[i]))
+  #plt.ylim(-0.1,3000)
+  plt.yscale('symlog')
+  #plt.legend(loc = 4)
+  plt.legend(bbox_to_anchor=(1.15, 1), borderaxespad=0)
+  #plt.show()
+  plt.savefig('C:/project/Summer_2022_DrMKJolly/Link_Noise/individualSimuls/ToggleSwitch/test/param_no_' + str(param_no) + "/StabFreq_TS_param_" + str(int(param)%3) + "_timestep_"+ str(dt2[i]) +'.png',bbox_inches="tight", dpi = 300)
+  plt.close()
+
+for i in range(len(noises)):
+  f = plt.figure()
+  f.set_figwidth(7)
+  f.set_figheight(5)
+  for key in states.keys():
+      y = stability[key][i::len(noises)]
+      x = dt2
+      plt.plot(x,y, label = key, marker='o', alpha = 0.7)
+  plt.title('Stability mean for TS; Param: ' + str(param) + 'noise:' + str(noises[i]))
+  #plt.ylim(-0.1,3000)
+  plt.yscale('symlog')
+  #plt.legend(loc = 4)
+  plt.legend(bbox_to_anchor=(1.15, 1), borderaxespad=0)
+  #plt.show()
+  plt.savefig('C:/project/Summer_2022_DrMKJolly/Link_Noise/individualSimuls/ToggleSwitch/test/param_no_' + str(param_no) + "/StabFreq_TS_param_" + str(int(param)%3) + "_noise_"+ str(noises[i]) +'.png',bbox_inches="tight", dpi = 300)
   plt.close()

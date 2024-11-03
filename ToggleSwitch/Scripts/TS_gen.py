@@ -6,6 +6,8 @@ Created on Fri Jul 22 12:30:48 2022
 """
 
 import numpy as np
+import pandas as pd
+import seaborn as sns
 import os
 import random
 import matplotlib.pyplot as plt
@@ -23,10 +25,27 @@ def step(x, tau):
 
 def count_switches(lst):
     switch_count = 0
+    switches = {}
+    stabilities = {'10' : [],
+          '01' : [],
+          '00' : [],
+          '11' : []}
+    t = 1
     for i in range(1, len(lst)):
         if lst[i] != lst[i - 1]:
+            stabilities[str(lst[i - 1])[3:]].append(t)
+            t = 1
             switch_count += 1
-    return switch_count
+            if ((lst[i - 1], lst[i]) in switches):
+                switches[(lst[i - 1], lst[i])] += 1
+            else:
+                switches[(lst[i - 1], lst[i])] = 1
+        else: 
+            t += 1
+    stabilities[str(lst[-1])[3:]].append(t)
+    for key in stabilities.keys():
+        stabilities[key] = sum(stabilities[key]) / len(stabilities[key]) if len(stabilities[key]) else 0
+    return switch_count, stabilities, switches
 
 def integration_const(p, time, time2, index, p_index, noise):
     dt = time[1] - time[0]
@@ -90,17 +109,17 @@ def integration_const(p, time, time2, index, p_index, noise):
                 st_00 += 0.01
                 curr_st.append('st_00')
 
-    num_switches = count_switches(curr_st)
+    num_switches, stabilities, switches = count_switches(curr_st)
 
-    return D,E,st_10,st_01,st_11,st_00, lamda_track, num_switches, curr_st
+    return D,E,st_10,st_01,st_11,st_00, lamda_track, num_switches, stabilities, switches, curr_st
 
 
 T = 1000
 dt = 0.01
 time = np.arange(0.0,T+dt,dt).round(2)
-dt2 = [0.01, 0.1, 1, 10, 100]
+dt2 = [0.01]#[0.01, 0.1, 1, 10, 100]
 
-noises = [0.006]#np.arange(0.0, 0.011,0.002).round(4)
+noises = np.arange(0.0, 0.011,0.002).round(4)
 n_points = time.size
 
 folder = "C:/project/Summer_2022_DrMKJolly/Link_Noise/individualSimuls/ToggleSwitch"
@@ -173,6 +192,13 @@ for i in range(11, 12, 3):
                 }
 
             total_switches_ls = []
+            stabilities = {
+                '10' : [],
+                '01' : [],
+                '00' : [],
+                '11' : []
+            }
+            switches = {}
             f = plt.figure(figsize = (17, 15))
             ax1 = plt.subplot(331)
             ax2 = plt.subplot(332)
@@ -182,8 +208,15 @@ for i in range(11, 12, 3):
             ax = [ax1,ax2,ax3,ax4,ax5]
             
             for l in range(n):
-                D,E,st_10,st_01,st_11,st_00,lt, num_sw, curr_st = integration_const(p, time, time2, l, i, noise)
+                D,E,st_10,st_01,st_11,st_00,lt, num_sw, stb, sw, curr_st = integration_const(p, time, time2, l, i, noise)
                 total_switches_ls.append(num_sw)
+                for keys in stabilities.keys():
+                    stabilities[keys].append(stb[keys])
+                for key in sw.keys():
+                    if key in switches:
+                        switches[key].append(sw[key])
+                    else:
+                        switches[key] = [sw[key]]
                 
                 states['10'].append(st_10)
                 states['01'].append(st_01)
@@ -205,15 +238,16 @@ for i in range(11, 12, 3):
                 tt_dynamics.append(np.array([D,E]))
             
             switching_events[noise] = [sum(total_switches_ls),stat.stdev(total_switches_ls),stat.mean(total_switches_ls)]
-            
+            stabilities = {key : [stat.stdev(stabilities[key]), stat.mean(stabilities[key])] for key in stabilities.keys()}
+            switches = {key : stat.mean(switches[key]) for key in switches.keys()}
             
             f_mrt.write('\nFor noise: {}'.format(noise))
             f_mrt.write('\n#SE: {:<8} {:<15} {:<10}'.format(switching_events[noise][0], switching_events[noise][1], switching_events[noise][2]))
             f_mrt.write('\n{:<8} {:<15}'.format('State', 'MRT'))
-            f_mrt.write('\n{:<8} {:<15} {:<10}'.format('10', stat.stdev(states['10']), stat.mean(states['10'])))
-            f_mrt.write('\n{:<8} {:<15} {:<10}'.format('01', stat.stdev(states['01']), stat.mean(states['01'])))
-            f_mrt.write('\n{:<8} {:<15} {:<10}'.format('00', stat.stdev(states['00']), stat.mean(states['00'])))
-            f_mrt.write('\n{:<8} {:<15} {:<10}'.format('11', stat.stdev(states['11']), stat.mean(states['11'])))
+            f_mrt.write('\n{:<8} {:<15} {:<10} {:<15} {:<10}'.format('10', stat.stdev(states['10']), stat.mean(states['10']), stabilities['10'][0], stabilities['10'][1]))
+            f_mrt.write('\n{:<8} {:<15} {:<10} {:<15} {:<10}'.format('01', stat.stdev(states['01']), stat.mean(states['01']), stabilities['01'][0], stabilities['01'][1]))
+            f_mrt.write('\n{:<8} {:<15} {:<10} {:<15} {:<10}'.format('00', stat.stdev(states['00']), stat.mean(states['00']), stabilities['00'][0], stabilities['00'][1]))
+            f_mrt.write('\n{:<8} {:<15} {:<10} {:<15} {:<10}'.format('11', stat.stdev(states['11']), stat.mean(states['11']), stabilities['11'][0], stabilities['11'][1]))
 
             
             
@@ -233,45 +267,64 @@ for i in range(11, 12, 3):
             plt.close()        
             #arr_dynamics.append(tt_dynamics)
 
+            sw_plot = {}
+            allStates = ['st_00', 'st_11', 'st_01', 'st_10']
+            for x in allStates:
+                for y in allStates:
+                    sw_plot[(x,y)] = 0
+            for key in switches.keys():
+                sw_plot[key] = switches[key]
+
+            f = plt.figure()
+            f.set_figwidth(7)
+            f.set_figheight(5)
+
+            ser = pd.Series(list(sw_plot.values()), index=pd.MultiIndex.from_tuples(sw_plot.keys()))
+            df = ser.unstack().fillna(0)
+            sns.heatmap(df, vmin = 0)
+
+            plt.savefig(folder + "/test/param_no_" + param_no + "/HM_Noise" + str(noise) + "_dt2" + str(timestep) + "_param_" + str(int(i%3)) +'.png',dpi = 300)
+            plt.close()
+
             
                 
             #file = 'value_storage/toggleTriad_noise_' + str(noise) + '_time_' + str(T) + '_param_' + str(i) + '.npy'
             #np.save(folder + file, np.array(tt_dynamics))
 
 
-    '''
-        f = plt.figure()
-        f.set_figwidth(7)
-        f.set_figheight(5)
-        
-        plt.bar(range(len(switching_events)), [i[0] for i in list(switching_events.values())], align='center')
-        #plt.errorbar(range(len(switching_events)), [i[2] for i in list(switching_events.values())], yerr = [i[1] for i in list(switching_events.values())])
-        plt.xticks(range(len(switching_events)), list(switching_events.keys()))
-        
+            '''
+            f = plt.figure()
+            f.set_figwidth(7)
+            f.set_figheight(5)
+            
+            plt.bar(range(len(switching_events)), [i[0] for i in list(switching_events.values())], align='center')
+            #plt.errorbar(range(len(switching_events)), [i[2] for i in list(switching_events.values())], yerr = [i[1] for i in list(switching_events.values())])
+            plt.xticks(range(len(switching_events)), list(switching_events.keys()))
+            
 
-        plt.ylabel('# Switching events')
-        plt.xlabel('Noise')
-        plt.title("Num switching evenets; Param: " + str(i))
+            plt.ylabel('# Switching events')
+            plt.xlabel('Noise')
+            plt.title("Num switching evenets; Param: " + str(i))
 
-        plt.savefig(folder + "/test/param_no_" + param_no + "/TS_Num_switching_param_" + str(int(i%3)) +'.png', dpi = 300)
-        plt.close()
+            plt.savefig(folder + "/test/param_no_" + param_no + "/TS_Num_switching_param_" + str(int(i%3)) +'.png', dpi = 300)
+            plt.close()
 
-        f = plt.figure()
-        f.set_figwidth(7)
-        f.set_figheight(5)
-        
-        plt.bar(range(len(switching_events)), [i[2] for i in list(switching_events.values())], align='center')
-        plt.errorbar(range(len(switching_events)), [i[2] for i in list(switching_events.values())], yerr = [i[1] for i in list(switching_events.values())], fmt = 'o', color = 'r')
-        plt.xticks(range(len(switching_events)), list(switching_events.keys()))
-        
+            f = plt.figure()
+            f.set_figwidth(7)
+            f.set_figheight(5)
+            
+            plt.bar(range(len(switching_events)), [i[2] for i in list(switching_events.values())], align='center')
+            plt.errorbar(range(len(switching_events)), [i[2] for i in list(switching_events.values())], yerr = [i[1] for i in list(switching_events.values())], fmt = 'o', color = 'r')
+            plt.xticks(range(len(switching_events)), list(switching_events.keys()))
+            
 
-        plt.ylabel('# Switching events')
-        plt.xlabel('Noise')
-        plt.title("Num switching evenets; Param: " + str(i))
-        plt.savefig(folder + "/test/param_no_" + param_no + "/TS_Num_switching_error_param_" + str(int(i%3)) +'.png',dpi = 300)
+            plt.ylabel('# Switching events')
+            plt.xlabel('Noise')
+            plt.title("Num switching evenets; Param: " + str(i))
+            plt.savefig(folder + "/test/param_no_" + param_no + "/TS_Num_switching_error_param_" + str(int(i%3)) +'.png',dpi = 300)
 
-        #plt.savefig("C:/project/Summer_2022_DrMKJolly/Link_Noise/individualSimuls/ToggleTriad/MRTs/" + "test_TT_Num_switching_error_param_" + str(i) +'.png')
-        plt.close()
-    '''
+            #plt.savefig("C:/project/Summer_2022_DrMKJolly/Link_Noise/individualSimuls/ToggleTriad/MRTs/" + "test_TT_Num_switching_error_param_" + str(i) +'.png')
+            plt.close()
+            '''
     f_mrt.close()
     print('file '+str(i)+'saved')
